@@ -580,9 +580,14 @@ function getFaceMetrics(face: FaceSnapshot): {
   const rightCheek = getPoint(face, landmark.cheekRight);
   const eyeDistance = distance(leftEye, rightEye);
   const cheekDistance = distance(leftCheek, rightCheek);
+  const [screenLeftEye, screenRightEye] =
+    leftEye.x <= rightEye.x ? [leftEye, rightEye] : [rightEye, leftEye];
 
   return {
-    angle: Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x),
+    angle: Math.atan2(
+      screenRightEye.y - screenLeftEye.y,
+      screenRightEye.x - screenLeftEye.x,
+    ),
     faceWidth: Math.max(cheekDistance, eyeDistance * 1.95, 80),
     eyeDistance,
   };
