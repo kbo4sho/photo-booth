@@ -1,17 +1,20 @@
 import {
+  Aperture,
   Camera,
-  CircleAlert,
   Crown,
   Download,
+  GalleryHorizontal,
   Gamepad2,
-  Image,
+  Images,
   Palette,
   PartyPopper,
   RefreshCw,
   Rocket,
+  SlidersHorizontal,
   Sparkles,
   Video,
   WandSparkles,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -82,6 +85,9 @@ function App() {
   const [flash, setFlash] = useState(false);
   const [preview, setPreview] = useState<Capture | null>(null);
   const [captures, setCaptures] = useState<Capture[]>([]);
+  const [captureMode, setCaptureMode] = useState<CaptureLayout>("single");
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const activeTheme = themePacks[themeIndex];
   const activePropMix = propMixes[propMixIndex];
@@ -192,8 +198,8 @@ function App() {
     const resizeCanvas = (canvas: HTMLCanvasElement) => {
       const stage = stageRef.current;
       const rect = stage?.getBoundingClientRect();
-      const cssWidth = Math.max(360, Math.floor(rect?.width ?? 960));
-      const cssHeight = Math.max(280, Math.floor(rect?.height ?? 540));
+      const cssWidth = Math.max(1, Math.floor(rect?.width ?? 960));
+      const cssHeight = Math.max(1, Math.floor(rect?.height ?? 540));
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const pixelWidth = Math.floor(cssWidth * dpr);
       const pixelHeight = Math.floor(cssHeight * dpr);
@@ -365,194 +371,268 @@ function App() {
   }, [preview]);
 
   const retake = useCallback(() => {
-    setPreview(null);
+    setGalleryOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!controlsOpen && !galleryOpen) {
+      return;
+    }
+
+    const closeOverlay = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setControlsOpen(false);
+        setGalleryOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeOverlay);
+    return () => window.removeEventListener("keydown", closeOverlay);
+  }, [controlsOpen, galleryOpen]);
 
   const statusLabel = getStatusLabel(cameraStatus, trackerStatus, cameraError);
 
   return (
     <div className="app-shell">
       <video ref={videoRef} className="camera-feed" aria-hidden="true" />
-      <header className="top-bar">
-        <div className="brand">
-          <span className="brand-mark">
-            <Sparkles size={22} aria-hidden="true" />
-          </span>
-          <div>
-            <h1>Birthday Magic Mirror</h1>
-            <p>{activeTheme.name}</p>
+      <main ref={stageRef} className={`stage ${flash ? "is-flashing" : ""}`} aria-label="Live photo booth preview">
+        <canvas ref={canvasRef} className="booth-canvas" />
+
+        {cameraStatus !== "ready" && (
+          <div className="permission-panel" role="status">
+            <div className="permission-icon">
+              <Video size={30} aria-hidden="true" />
+            </div>
+            <h2>{cameraStatus === "requesting" ? "Starting camera" : "Camera needs attention"}</h2>
+            <p>{cameraError || "Allow camera access to start the booth."}</p>
+            {cameraStatus !== "requesting" && (
+              <button className="primary-action" type="button" onClick={() => void requestCamera()}>
+                <RefreshCw size={18} aria-hidden="true" />
+                Try again
+              </button>
+            )}
           </div>
+        )}
+
+        {countdown !== null && <div className="countdown-pop">{countdown}</div>}
+
+        {isCapturing && shotProgress.total > 1 && (
+          <div className="shot-progress">
+            Shot {shotProgress.current} of {shotProgress.total}
+          </div>
+        )}
+      </main>
+
+      <header className="camera-top-bar">
+        <div className="booth-identity">
+          <span className="booth-mark">
+            <Sparkles size={18} aria-hidden="true" />
+          </span>
+          <span>
+            <strong>Magic Mirror</strong>
+            <small>{activeTheme.shortName}</small>
+          </span>
         </div>
 
-        <div className={`status-pill status-${cameraStatus}`} aria-live="polite">
-          {cameraStatus === "ready" ? <Video size={18} /> : <CircleAlert size={18} />}
-          <span>{statusLabel}</span>
+        <div className="camera-top-actions">
+          <div className={`camera-status status-${cameraStatus}`} aria-live="polite">
+            <span className="status-dot" />
+            <span className="status-copy">{statusLabel}</span>
+          </div>
+          <button
+            className="glass-button"
+            type="button"
+            aria-label="Open photo booth controls"
+            aria-expanded={controlsOpen}
+            onClick={() => {
+              setGalleryOpen(false);
+              setControlsOpen(true);
+            }}
+          >
+            <SlidersHorizontal size={20} aria-hidden="true" />
+          </button>
         </div>
       </header>
 
-      <main className="booth-layout">
-        <section className="stage-panel" aria-label="Live photo booth preview">
-          <div ref={stageRef} className={`stage ${flash ? "is-flashing" : ""}`}>
-            <canvas ref={canvasRef} className="booth-canvas" />
+      <div className="camera-bottom-bar">
+        <div className="capture-modes" aria-label="Capture mode">
+          <button
+            className={captureMode === "single" ? "is-active" : ""}
+            type="button"
+            title="Photo"
+            aria-label="Photo mode"
+            aria-pressed={captureMode === "single"}
+            onClick={() => setCaptureMode("single")}
+          >
+            <Camera size={20} aria-hidden="true" />
+            <span className="visually-hidden">Photo</span>
+          </button>
+          <button
+            className={captureMode === "strip" ? "is-active" : ""}
+            type="button"
+            title="Photo strip"
+            aria-label="Photo strip mode"
+            aria-pressed={captureMode === "strip"}
+            onClick={() => setCaptureMode("strip")}
+          >
+            <GalleryHorizontal size={21} aria-hidden="true" />
+            <span className="visually-hidden">Photo strip</span>
+          </button>
+        </div>
 
-            {cameraStatus !== "ready" && (
-              <div className="permission-panel" role="status">
-                <div className="permission-icon">
-                  <Video size={32} aria-hidden="true" />
-                </div>
-                <h2>{cameraStatus === "requesting" ? "Starting Camera" : "Camera Needs Attention"}</h2>
-                <p>{cameraError || "Allow camera access to start the booth."}</p>
-                {cameraStatus !== "requesting" && (
-                  <button className="primary-action" type="button" onClick={() => void requestCamera()}>
-                    <RefreshCw size={20} aria-hidden="true" />
-                    Try Again
+        <div className="capture-actions">
+          <button
+            className={`gallery-button ${preview ? "has-preview" : ""}`}
+            type="button"
+            aria-label="Open recent captures"
+            disabled={!preview}
+            onClick={() => {
+              setControlsOpen(false);
+              setGalleryOpen(true);
+            }}
+          >
+            {preview ? <img src={preview.dataUrl} alt="Latest capture" /> : <Images size={23} aria-hidden="true" />}
+          </button>
+
+          <button
+            className="shutter-button"
+            type="button"
+            aria-label={captureMode === "strip" ? "Take a three-photo strip" : "Take a photo"}
+            disabled={cameraStatus !== "ready" || isCapturing}
+            onClick={() => void runCapture(captureMode)}
+          >
+            <Aperture size={31} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+
+          <button
+            className="effects-button"
+            type="button"
+            aria-label="Choose theme and props"
+            onClick={() => {
+              setGalleryOpen(false);
+              setControlsOpen(true);
+            }}
+          >
+            <WandSparkles size={23} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      {controlsOpen && (
+        <>
+          <button
+            className="overlay-scrim"
+            type="button"
+            aria-label="Close photo booth controls"
+            onClick={() => setControlsOpen(false)}
+          />
+          <aside className="control-sheet" role="dialog" aria-modal="true" aria-labelledby="controls-title">
+            <header className="sheet-header">
+              <div>
+                <span className="sheet-kicker">Make it yours</span>
+                <h2 id="controls-title">Look tools</h2>
+              </div>
+              <button className="sheet-close" type="button" aria-label="Close controls" onClick={() => setControlsOpen(false)}>
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+
+            <section className="control-section" aria-labelledby="theme-title">
+              <div className="control-section-heading">
+                <span><Palette size={17} aria-hidden="true" /> Theme</span>
+                <strong id="theme-title">{activeTheme.name}</strong>
+              </div>
+              <div className="option-grid theme-options">
+                {themePacks.map((theme, index) => {
+                  const Icon = themeIcons[theme.id];
+                  return (
+                    <button
+                      key={theme.id}
+                      className={`option-card ${index === themeIndex ? "is-active" : ""}`}
+                      type="button"
+                      aria-pressed={index === themeIndex}
+                      onClick={() => setThemeIndex(index)}
+                    >
+                      <span className="option-icon"><Icon size={21} aria-hidden="true" /></span>
+                      <span>{theme.shortName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="control-section" aria-labelledby="props-title">
+              <div className="control-section-heading">
+                <span><WandSparkles size={17} aria-hidden="true" /> Props</span>
+                <strong id="props-title">{activePropMix.name}</strong>
+              </div>
+              <div className="option-grid prop-options">
+                {propMixes.map((mix, index) => (
+                  <button
+                    key={mix.id}
+                    className={`option-card prop-option ${index === propMixIndex ? "is-active" : ""}`}
+                    type="button"
+                    aria-pressed={index === propMixIndex}
+                    onClick={() => setPropMixIndex(index)}
+                  >
+                    <WandSparkles size={19} aria-hidden="true" />
+                    <span>{mix.name}</span>
                   </button>
-                )}
+                ))}
               </div>
-            )}
+            </section>
+          </aside>
+        </>
+      )}
 
-            {countdown !== null && <div className="countdown-pop">{countdown}</div>}
-
-            {isCapturing && shotProgress.total > 1 && (
-              <div className="shot-progress">
-                Shot {shotProgress.current} of {shotProgress.total}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <aside className="control-rail" aria-label="Photo booth controls">
-          <div className="theme-dock" aria-label="Theme picker">
-            {themePacks.map((theme, index) => {
-              const Icon = themeIcons[theme.id];
-              return (
-                <button
-                  key={theme.id}
-                  className={`theme-dot ${index === themeIndex ? "is-active" : ""}`}
-                  style={{ "--theme-accent": theme.accent } as React.CSSProperties}
-                  type="button"
-                  title={theme.name}
-                  aria-label={theme.name}
-                  onClick={() => setThemeIndex(index)}
-                >
-                  <Icon size={24} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="action-grid">
-            <button
-              className="control-button"
-              type="button"
-              title="Change theme"
-              onClick={() => setThemeIndex((current) => (current + 1) % themePacks.length)}
-            >
-              <Palette size={24} aria-hidden="true" />
-              <span>
-                Theme
-                <strong>{activeTheme.shortName}</strong>
-              </span>
+      {galleryOpen && preview && (
+        <section className="capture-viewer" role="dialog" aria-modal="true" aria-label="Captured photo">
+          <header className="viewer-header">
+            <button className="viewer-icon-button" type="button" aria-label="Back to camera" onClick={retake}>
+              <X size={22} aria-hidden="true" />
             </button>
-
-            <button
-              className="control-button"
-              type="button"
-              title="Change props"
-              onClick={() => setPropMixIndex((current) => (current + 1) % propMixes.length)}
-            >
-              <WandSparkles size={24} aria-hidden="true" />
-              <span>
-                Props
-                <strong>{activePropMix.name}</strong>
-              </span>
-            </button>
-
-            <button
-              className="control-button control-button-primary"
-              type="button"
-              title="Take photo"
-              disabled={cameraStatus !== "ready" || isCapturing}
-              onClick={() => void runCapture("single")}
-            >
-              <Camera size={26} aria-hidden="true" />
-              <span>
-                Snap
-                <strong>1 photo</strong>
-              </span>
-            </button>
-
-            <button
-              className="control-button"
-              type="button"
-              title="Take photo strip"
-              disabled={cameraStatus !== "ready" || isCapturing}
-              onClick={() => void runCapture("strip")}
-            >
-              <Image size={24} aria-hidden="true" />
-              <span>
-                Strip
-                <strong>3 shots</strong>
-              </span>
-            </button>
-
-            <button
-              className="control-button"
-              type="button"
-              title="Retake"
-              disabled={!preview || isCapturing}
-              onClick={retake}
-            >
-              <RefreshCw size={24} aria-hidden="true" />
-              <span>
-                Retake
-                <strong>Clear preview</strong>
-              </span>
-            </button>
-
-            <button
-              className="control-button"
-              type="button"
-              title="Download"
-              disabled={!preview}
-              onClick={downloadPreview}
-            >
-              <Download size={24} aria-hidden="true" />
-              <span>
-                Save
-                <strong>PNG</strong>
-              </span>
-            </button>
-          </div>
-
-          <div className="preview-panel" aria-live="polite">
-            {preview ? (
-              <img src={preview.dataUrl} alt="Latest booth capture" />
-            ) : (
-              <div className="empty-preview">
-                <Camera size={30} aria-hidden="true" />
-                <span>Preview</span>
-              </div>
-            )}
-          </div>
-
-          {captures.length > 0 && (
-            <div className="capture-strip" aria-label="Recent captures">
-              {captures.slice(0, 5).map((capture) => (
-                <button
-                  key={capture.id}
-                  className={`capture-thumb ${preview?.id === capture.id ? "is-active" : ""}`}
-                  type="button"
-                  title="Open capture"
-                  onClick={() => setPreview(capture)}
-                >
-                  <img src={capture.dataUrl} alt="" />
-                </button>
-              ))}
+            <div>
+              <strong>{preview.layout === "strip" ? "Photo Strip" : "Photo"}</strong>
+              <span>{new Date(preview.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
             </div>
-          )}
-        </aside>
-      </main>
+            <button className="viewer-icon-button" type="button" aria-label="Download photo" onClick={downloadPreview}>
+              <Download size={21} aria-hidden="true" />
+            </button>
+          </header>
+
+          <div className="viewer-image-wrap">
+            <img src={preview.dataUrl} alt="Selected photo booth capture" />
+          </div>
+
+          <footer className="viewer-footer">
+            {captures.length > 1 && (
+              <div className="capture-strip" aria-label="Recent captures">
+                {captures.slice(0, 8).map((capture) => (
+                  <button
+                    key={capture.id}
+                    className={`capture-thumb ${preview.id === capture.id ? "is-active" : ""}`}
+                    type="button"
+                    aria-label="Open capture"
+                    onClick={() => setPreview(capture)}
+                  >
+                    <img src={capture.dataUrl} alt="" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="viewer-actions">
+              <button type="button" onClick={retake}>
+                <Camera size={18} aria-hidden="true" />
+                Back to camera
+              </button>
+              <button className="viewer-save" type="button" onClick={downloadPreview}>
+                <Download size={18} aria-hidden="true" />
+                Save photo
+              </button>
+            </div>
+          </footer>
+        </section>
+      )}
     </div>
   );
 }
